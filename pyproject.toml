@@ -1,0 +1,9 @@
+[project]
+name = "everything-index"
+version = "0.0.1"
+description = "A personal operating system built on one index of things."
+requires-python = ">=3.13"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src"]
