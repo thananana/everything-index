@@ -1,36 +1,39 @@
-# What is a thing
+# Things
 
-Owner's words, lightly arranged. This is the founding idea; keep it close to
-the original phrasing.
+Design notes. Distilled, not verbatim.
 
-## The problem
+## Why
 
-Things are scattered: Apple Notes, Google Docs, AI conversations, Google
-Calendar, Reminders, Gmail. I want all my things in one place.
+The owner's things are scattered across many apps. The goal is one place
+where anything can be thrown in and ingested, and ingestion gives it an ID.
 
-## Ingestion
+## What a thing is
 
-I want to throw things at the wall and have them ingest. The ingestion
-process gives things an ID. Identifying something and giving it a new,
-unique ID is always the first act.
+- A thing is whatever is worth recognizing and naming at all.
+- Things gather other things around them and grow, like planets.
+- A thing's properties are themselves things.
+- Many properties are precomputable from the raw material at ingestion.
 
-## Things
+## Language is a precomputable property
 
-- Things are like reads in a stream, or planets in spacetime: they gather
-  other things around them and grow.
-- A thing is whatever is worth seeing as a thing. Things are what get
-  named, what get recognized at all.
-- A thing's properties are also things.
-- Many of a thing's properties are precomputable.
-  (Owner's message cut off here: "...are precomputable, and that" — to be
-  continued.)
+Every character, word, sentence, paragraph, heading, and document is a
+thing. A word is an index of all its instances. Each instance is the context
+in which the word appears, and that context is both semantic (its meaning
+there) and computational (its position in a document, its neighbors).
+
+Technically this is an inverted index with positions, which is well
+understood. The design twist is that the entries are first-class things with
+stable IDs rather than internal bookkeeping.
+
+## Implication for IDs
+
+If every character and word occurrence is a thing, the index cannot store a
+row for each one up front. Derived things should have deterministic IDs
+(computable from the parent thing and the position) so they are identified
+without being stored until something attaches to them. This is how position
+and identity share a substrate.
 
 ## Open questions
 
-- What is the smallest act of "throwing something at the wall"? Pasted
-  text, a link, a photo, a forwarded email, a voice note?
-- What does a thing look like right after ingestion, before anything has
-  gathered around it? Probably: an ID, the raw thing, when and where it
-  came from, and nothing else.
-- Which properties can be computed at ingestion time (source, time,
-  type, size, links it contains, words it contains) versus later?
+- Smallest act of ingestion: pasted text, link, photo, forwarded email?
+- Which properties compute at ingestion versus later, on demand?
