@@ -56,7 +56,7 @@ python3 -m everything_index put idea projects
 python3 -m everything_index put idea projects --as drafts
 python3 -m everything_index show 1
 python3 -m everything_index show idea
-python3 -m everything_index show idea.words.2
+python3 -m everything_index show idea.words.1
 python3 -m everything_index name 1 idea
 python3 -m everything_index list
 ```
@@ -68,8 +68,10 @@ one is a thing, and `show` lists what a thing contains and everywhere it
 appears. `new` makes an empty named index and `put` places a thing in it,
 under a property you can choose with `--as`.
 
-An address reads thing, property, position. `cat.characters.2` is the
-second character of the thing named `cat`.
+A code reads thing, property, position, written as IDs: `12.13.2` means
+thing 12, under property 13, at position 2. Positions start at 0. You can
+type a name in place of any ID, so `cat.characters.1` is the second
+character of the thing named `cat`.
 
 Numbers are things. Write `#3` for the number three, since a bare `3` is
 the ID of the third thing ingested. Quote it on the command line.

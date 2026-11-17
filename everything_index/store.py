@@ -13,21 +13,30 @@ There are two ways a thing comes to exist:
 Every thing has a table. Each row of the table is one property, and a
 property is itself a thing, such as the index named "characters". Under a
 property sit the items, in order. So the word "cat" has the property
-"characters", and under it c, a, t at positions 1, 2, 3.
+"characters", and under it c, a, t at positions 0, 1, 2.
 
 Where a thing appears in other tables is the same information read the
 other way round, so it is never stored separately.
 
-An address is read left to right, separated by periods: a thing, then a
-property, then a position, and so on. "cat.characters.2" is the letter a.
-A thing or a property may be written as its ID or as its name.
+A code is read left to right, separated by periods: a thing, then a
+property, then a position, and so on. Things and properties are written as
+their IDs, so a code is nothing but integers, for example 12.20.1. For
+people, a name may stand in for any ID: cat.characters.1 is the letter a.
 
-Numbers are things too. The number three is the thing whose text is "3",
-written #3 so it is not confused with the ID 3. Whenever the system uses a
-number, as a position or as a count, that number is made a thing if it is
-not one already. The index named "numbers" holds each number at its own
-position: number n sits at position n. That is how numbers index
-themselves here.
+Digits come first. The very first things in the master index are the index
+named "digits" and the ten digits 0 to 9. Each digit sits at its own
+position in that index: 0 at position 0, up to 9 at position 9. That is
+the list that indexes itself, and it is why positions everywhere start
+at 0.
+
+Every other number is digits in places, read left to right as in text.
+305 has the characters 3, 0, 5 at places 0, 1, 2. The same ten digits are
+reused at every place, and zero holds a place like any other digit.
+
+A number is written #305 so it is not confused with the ID 305. IDs only
+record order of ingestion and have nothing to do with numbers. Whenever
+the system uses a number, as a position or as a count, that number is made
+a thing if it is not one already.
 
 Where the data lives:
 
@@ -73,8 +82,8 @@ class Index:
         self.db = sqlite3.connect(db_path)
         self.db.row_factory = sqlite3.Row
         self._batch = None
+        self._counted = None  # highest n with 0..n all things; found when needed
         self._catch_up()
-        self._counted = self._numbers_known()
 
     # --- keeping the database in step with the log -----------------------
 
@@ -153,16 +162,15 @@ class Index:
                 (event["name"], event["id"], event["time"]),
             )
         elif "into" in event:
-            position = self.db.execute(
-                "SELECT COALESCE(MAX(position), 0) FROM cells"
-                " WHERE thing = ? AND property = ?",
+            taken = self.db.execute(
+                "SELECT COUNT(*) FROM cells WHERE thing = ? AND property = ?",
                 (event["into"], event["as"]),
             ).fetchone()[0]
             self.db.executemany(
                 "INSERT INTO cells VALUES (?, ?, ?, ?)",
                 [
-                    (event["into"], event["as"], position + n, item)
-                    for n, item in enumerate(event["items"], start=1)
+                    (event["into"], event["as"], taken + n, item)
+                    for n, item in enumerate(event["items"])
                 ],
             )
         else:
@@ -180,6 +188,8 @@ class Index:
         """Group events so they are saved together, or not at all."""
         self._batch = []
         try:
+            if self.count() == 0:
+                self._seed_digits()
             yield
             if self._batch:
                 lines = "".join(
@@ -193,7 +203,7 @@ class Index:
             self.db.commit()
         except BaseException:
             self.db.rollback()
-            self._counted = self._numbers_known()
+            self._counted = None
             raise
         finally:
             self._batch = None
@@ -235,8 +245,8 @@ class Index:
         self._record({
             "into": thing_id, "as": property_id, "items": items, "time": now(),
         })
-        # The row now uses the positions 1..n and has the count n, so each
-        # of those numbers has been expressed and must be a thing.
+        # The row now uses the positions 0..n-1 and has the count n, so
+        # each of those numbers has been expressed and must be a thing.
         self._count_to(self._length(thing_id, property_id))
 
     def _length(self, thing_id: int, property_id: int) -> int:
@@ -245,23 +255,31 @@ class Index:
             (thing_id, property_id),
         ).fetchone()[0]
 
-    def _numbers_known(self) -> int:
-        """How far the numbers index reaches: 1, 2, 3 ... up to this."""
-        numbers = self._id_or_name("numbers")
-        return self._length(numbers, numbers) if numbers else 0
+    def _seed_digits(self):
+        """Start an empty index with the digits, each at its own position."""
+        digits = self._mint("index")
+        self._name(digits, "digits")
+        items = []
+        for digit in "0123456789":
+            data = digit.encode("utf-8")
+            items.append(self._mint(
+                "text", sha256=hashlib.sha256(data).hexdigest(),
+                size=len(data), text=digit,
+            ))
+        self._record({
+            "into": digits, "as": digits, "items": items, "time": now(),
+        })
 
     def _count_to(self, n: int):
-        """Make sure every number from 1 to n is a thing, at its own position."""
-        if n <= self._counted:
-            return
-        numbers = self._property("numbers")
-        first, new = self._counted + 1, []
-        for k in range(first, n + 1):
-            self._counted = k  # set first: making "12" uses positions 1 and 2
-            new.append(self._text_thing(str(k))[0])
-        self._record({
-            "into": numbers, "as": numbers, "items": new, "time": now(),
-        })
+        """Make sure every number from 0 to n is a thing."""
+        if self._counted is None:
+            k = 0
+            while self.number(k) is not None:
+                k += 1
+            self._counted = k - 1
+        while self._counted < n:
+            self._counted += 1  # raise first: making "12" uses places 0 and 1
+            self._text_thing(str(self._counted))
 
     def number(self, n: int) -> int | None:
         """The thing that is the number n, if it exists yet."""
@@ -367,7 +385,7 @@ class Index:
             elif self.get(as_property) is None:
                 raise ValueError(f"there is no thing {as_property}")
             self._into(into, as_property, [item])
-        return f"{into}.{as_property}.{len(self.row(into, as_property))}"
+        return f"{into}.{as_property}.{len(self.row(into, as_property)) - 1}"
 
     # --- naming -----------------------------------------------------------
 
@@ -414,7 +432,7 @@ class Index:
         return row["id"] if row else None
 
     def resolve(self, address: str) -> int | None:
-        """Turn an address into an ID.
+        """Turn a code, or the same thing written with names, into an ID.
 
         The first part is a thing, as an ID or a name. After that the parts
         come in pairs: a property, then a position under that property.

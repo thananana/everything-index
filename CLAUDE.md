@@ -27,12 +27,15 @@ core data model (thing / property / index, everything gets a stable ID).
   SQLite; `into` / `as` / `items` events in the log). A property is itself
   a thing. Where a thing appears is the same table read by item. Do not add
   a separate structure for relationships.
-- Addresses read thing.property.position, e.g. `cat.characters.2`.
+- Codes read thing.property.position and are pure IDs, e.g. `12.13.2`.
+  Names may replace any ID when a person types one. Positions start at 0.
+  Display codes as IDs with a plain-language reading beside them.
 - Numbers are things (the text of the numeral), written `#3`; a bare `3` is
-  an ID. IDs and numbers are deliberately unrelated. Any number the system
-  uses as a position or count is minted, and the `numbers` index holds
-  number n at position n. Counts and positions are read from `cells`, not
-  stored again.
+  an ID. IDs and numbers are deliberately unrelated. Every index starts
+  with the `digits` index and digits 0-9 at their own positions. Other
+  numbers are digits in places, left to right. Any number the system uses
+  as a position or count is minted. Counts and positions are read from
+  `cells`, not stored again.
 - Principle: everything is a property, and anything the system uses to
   express a thing must itself be a thing. Do not add hidden machinery.
 - Text is split into parts once, at ingestion (`everything_index/text.py`),

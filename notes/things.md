@@ -77,12 +77,17 @@ it has 3 characters, and "characters" is itself a thing in the index.
 So one cell is: holder, property, position, item. Parent and child is
 holder and item. Sequence is position. Kind is property.
 
-## Addresses
+## Codes
 
-Periods separate the steps: thing, property, position, and so on.
-`cat.characters.2` is the letter a. `story.sentences.2.words.1` goes two
-levels down. A thing or a property can be written as an ID or a name.
-Names therefore cannot contain periods.
+A code is a thing's location written as IDs only, separated by periods:
+thing, property, position, and so on. `12.13.2` reads "thing 12, under
+property 13, at position 2". The code is not meant to be readable on its
+own; it is the stable, general identifier. Thing 12 and the property
+"sentences" are equally things, each just an ID.
+
+For people, a name may stand in for any ID: `story.sentences.2`. The
+display always prints the pure code next to a plain reading. Names
+cannot contain periods.
 
 Putting a thing into a box without saying what it is uses the general
 property `things`.
@@ -103,17 +108,27 @@ as soon as it is expressible, and gets an ID when it is actually expressed.
 
 - IDs are integers only because integers keep the order of ingestion and
   are always unique. They have no connection to numbers as things.
-- A number is a thing: the thing whose text is its numeral. It is written
-  `#3` so it is not confused with the ID 3. A numeral met in ingested text
-  is the same thing as the number.
+- Digits come first. The first things in every index are the index named
+  `digits` and the ten digits 0 to 9, each at its own position: digit d
+  sits at position d. This is the list that indexes itself.
+- Positions everywhere therefore start at 0.
+- Every other number is digits in places, read left to right as in text.
+  305 has 3, 0, 5 at places 0, 1, 2. Place value is a table: place one
+  way, digit the other. The point is a stable, general way to say where
+  something is, not to compute arithmetic.
+- A number is written `#3` so it is not confused with the ID 3.
 - When the system uses a number, as a position or a count, the number
   becomes a thing if it is not one yet.
-- Numbers index themselves: the index named `numbers` holds number n at
-  position n, so `numbers.numbers.7` is `#7`.
-- A number is made of digits, which are numbers: `#12` has the characters
-  `#1` and `#2`. This falls out of the ordinary text rules.
 - Read backwards, a number shows what it counts and what sits at it.
   Those are read off the tables, not stored.
+
+### Numeral and number (open)
+
+A 3 that is typed or read and a 3 that arises because something is third
+are meaningfully different, and that difference should have its own
+index. They are still the same 3: which properties you attend to decides
+whether they appear joined or apart. Currently both are one thing; the
+distinguishing properties (written, position, count) are not built yet.
 
 ## Intersection
 

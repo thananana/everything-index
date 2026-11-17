@@ -7,17 +7,17 @@
     python3 -m everything_index new projects      (an empty named index)
     python3 -m everything_index put idea projects (put one thing in another)
     python3 -m everything_index put idea projects --as drafts
-    python3 -m everything_index show 1            (or: show idea)
-    python3 -m everything_index show idea.words.2
-    python3 -m everything_index show '#3'           (the number three)
+    python3 -m everything_index show idea
+    python3 -m everything_index show idea.words.1
+    python3 -m everything_index show '#3'             (the number three)
     python3 -m everything_index find characters '#3'  (things with both)
-    python3 -m everything_index name 1 idea
+    python3 -m everything_index name 12 idea
     python3 -m everything_index list
 
-Anywhere a thing is asked for you can give an ID, a name, or an address.
-An address reads thing.property.position, for example cat.characters.2.
-A number as a thing is written with #, so #3 is three and 3 is the ID 3.
-Put quotes around anything with # in it.
+A code reads thing.property.position and is made only of IDs, such as
+12.20.1. You may write a name in place of any ID, such as idea.words.1.
+Positions start at 0. A number as a thing is written with #, so #3 is the
+number three while 3 is the ID 3. Put quotes around anything with # in it.
 """
 
 import argparse
@@ -45,9 +45,13 @@ def labelled(index: Index, thing_id: int) -> str:
 
 
 def spoken(index: Index, thing_id: int) -> str:
-    """A thing's first name if it has one, otherwise its ID."""
-    names = index.get(thing_id)["names"]
-    return names[0] if names else str(thing_id)
+    """How to say a thing: its name, or else its own text in quotes."""
+    thing = index.get(thing_id)
+    if thing["names"]:
+        return thing["names"][0]
+    if thing["kind"] == "text":
+        return f'"{preview(thing, 28)}"'
+    return preview(thing, 28)
 
 
 def find(index: Index, address: str) -> int:
@@ -55,6 +59,10 @@ def find(index: Index, address: str) -> int:
     if thing_id is None:
         raise ValueError(f"nothing is identified by {address!r}")
     return thing_id
+
+
+def line(code: str, reading: str):
+    print(f"  {code:<14} {reading}")
 
 
 def show(index: Index, thing_id: int):
@@ -72,12 +80,10 @@ def show(index: Index, thing_id: int):
         print(thing["text"])
 
     for property_id, count in index.properties(thing_id):
-        word = spoken(index, property_id)
-        print(f"\n{word}  {count}")
+        print(f"\nhas {count} {spoken(index, property_id)}   (property {property_id})")
         items = index.row(thing_id, property_id)
-        for position, item in enumerate(items[:SHOWN], start=1):
-            address = f"{thing_id}.{word}.{position}"
-            print(f"  {address:<22} {item:>6}  {labelled(index, item)}")
+        for position, item in enumerate(items[:SHOWN]):
+            line(f"{thing_id}.{property_id}.{position}", labelled(index, item))
         if count > SHOWN:
             print(f"  … and {count - SHOWN} more")
 
@@ -85,8 +91,11 @@ def show(index: Index, thing_id: int):
     if total:
         print(f"\nappears in {total} place{'' if total == 1 else 's'}")
         for holder, property_id, position in index.instances(thing_id, SHOWN):
-            address = f"{holder}.{spoken(index, property_id)}.{position}"
-            print(f"  {address:<22} in  {labelled(index, holder)}")
+            line(
+                f"{holder}.{property_id}.{position}",
+                f"in {spoken(index, holder)}, under "
+                f"{spoken(index, property_id)}, at {position}",
+            )
         if total > SHOWN:
             print(f"  … and {total - SHOWN} more")
 
@@ -94,18 +103,23 @@ def show(index: Index, thing_id: int):
     if n is not None:
         rows = index.counted_by(n, SHOWN + 1)
         if rows:
-            print(f"\nis the count of")
+            print(f"\nis how many")
             for holder, property_id in rows[:SHOWN]:
-                word = spoken(index, property_id)
-                print(f"  {n} {word:<14} in  {labelled(index, holder)}")
+                line(
+                    f"{holder}.{property_id}",
+                    f"{spoken(index, holder)} has {n} {spoken(index, property_id)}",
+                )
             if len(rows) > SHOWN:
                 print("  … and more")
         cells = index.positioned_at(n, SHOWN + 1)
         if cells:
             print(f"\nis the position of")
             for holder, property_id, item in cells[:SHOWN]:
-                address = f"{holder}.{spoken(index, property_id)}.{n}"
-                print(f"  {address:<22} {labelled(index, item)}")
+                line(
+                    f"{holder}.{property_id}.{n}",
+                    f"{spoken(index, item)}, in {spoken(index, holder)}, "
+                    f"under {spoken(index, property_id)}",
+                )
             if len(cells) > SHOWN:
                 print("  … and more")
 
@@ -114,7 +128,7 @@ def show(index: Index, thing_id: int):
         print(f"\nis a property of {total} thing{'' if total == 1 else 's'}")
         for holder in index.holders(thing_id, SHOWN):
             count = len(index.row(holder, thing_id))
-            print(f"  {holder:>6}  {count:>4} in  {labelled(index, holder)}")
+            line(f"{holder}.{thing_id}", f"{spoken(index, holder)} has {count}")
         if total > SHOWN:
             print(f"  … and {total - SHOWN} more")
 
@@ -138,7 +152,7 @@ def main(argv=None) -> int:
                    help="what the item is to its holder (default: things)")
 
     p = commands.add_parser("show", help="show one thing")
-    p.add_argument("address", help="an ID, a name, or an address like cat.characters.2")
+    p.add_argument("address", help="an ID, a name, or a code like cat.characters.1")
 
     p = commands.add_parser("find", help="things that have all the given properties")
     p.add_argument("properties", nargs="+")
@@ -180,9 +194,11 @@ def main(argv=None) -> int:
             known = index.resolve(args.as_property)
             index.put(item, into, known if known else args.as_property)
             property_id = index.resolve(args.as_property)
-            word = spoken(index, property_id)
-            position = len(index.row(into, property_id))
-            print(f"now at {spoken(index, into)}.{word}.{position}")
+            position = len(index.row(into, property_id)) - 1
+            print(
+                f"{into}.{property_id}.{position}  in {spoken(index, into)}, "
+                f"under {spoken(index, property_id)}, at {position}"
+            )
 
         elif args.command == "show":
             show(index, find(index, args.address))
