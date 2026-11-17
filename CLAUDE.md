@@ -16,7 +16,18 @@ core data model (thing / property / index, everything gets a stable ID).
   when the session ends.
 - Prefer small, readable files over clever ones.
 
+## How the data is stored
+
+- `index/log.jsonl` is the source of truth: append-only, one event per line.
+  Never rewrite or reorder it. IDs are integers in order of ingestion.
+- `data/index.db` is SQLite, rebuilt from the log automatically. Never commit it.
+- A thing is identified by its raw bytes (SHA-256). Same bytes, same ID.
+- The repository is public unless the owner has changed it. Check before
+  committing ingested personal content, and warn the owner if it is public.
+- Design notes are in `notes/things.md`, the plan in `notes/roadmap.md`.
+  Write notes as distilled design, not as transcripts of the owner's words.
+
 ## Commands
 
-- Run: `python3 -m everything_index`
-- Test: `python3 -m pytest` (once tests exist) or `python3 -m unittest`
+- Run: `python3 -m everything_index` (from the repository root)
+- Test: `python3 -m unittest`

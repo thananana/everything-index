@@ -6,4 +6,4 @@ requires-python = ">=3.13"
 dependencies = []
 
 [tool.setuptools.packages.find]
-where = ["src"]
+include = ["everything_index*"]

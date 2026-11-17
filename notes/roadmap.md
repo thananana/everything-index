@@ -4,7 +4,7 @@ Each step ends with something that runs and is pushed.
 
 0. **Privacy.** The repository is public. Before any personal content is
    ingested, make it private or move data to a separate private repository.
-1. **Master index.** Ingest a piece of text, get the next integer. Optional
+1. **Master index. DONE.** Ingest a piece of text, get the next integer. Optional
    name. Time created recorded automatically. Same content returns the
    same ID. Stored as an append-only log in plain text, in git.
 2. **Text decomposition.** Ingested text is broken into sentences, words,

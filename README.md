@@ -35,14 +35,32 @@ way they are encountered or imagined.
 ## Layout
 
 ```
-src/everything_index/   Python package (the system itself)
-tests/                  tests
-notes/                  Markdown notes and thinking
-data/                   local databases and generated files (ignored by git)
+everything_index/   Python package (the system itself)
+index/log.jsonl     the master index: an append-only log, the source of truth
+index/files/        raw bytes of ingested things that are not text
+tests/              tests
+notes/              design notes and roadmap
+data/               SQLite database rebuilt from the log (ignored by git)
 ```
 
-## Running
+## Using it
+
+Run these from the top folder of the repository.
 
 ```bash
-python3 -m everything_index
+python3 -m everything_index ingest "some text"
+python3 -m everything_index ingest "some text" --name idea
+python3 -m everything_index ingest --file photo.jpg
+python3 -m everything_index show 1
+python3 -m everything_index show idea
+python3 -m everything_index name 1 idea
+python3 -m everything_index list
+```
+
+Ingesting prints the ID. The same content always gives the same ID.
+
+## Tests
+
+```bash
+python3 -m unittest
 ```
