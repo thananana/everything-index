@@ -28,6 +28,13 @@ core data model (thing / property / index, everything gets a stable ID).
   a thing. Where a thing appears is the same table read by item. Do not add
   a separate structure for relationships.
 - Addresses read thing.property.position, e.g. `cat.characters.2`.
+- Numbers are things (the text of the numeral), written `#3`; a bare `3` is
+  an ID. IDs and numbers are deliberately unrelated. Any number the system
+  uses as a position or count is minted, and the `numbers` index holds
+  number n at position n. Counts and positions are read from `cells`, not
+  stored again.
+- Principle: everything is a property, and anything the system uses to
+  express a thing must itself be a thing. Do not add hidden machinery.
 - Text is split into parts once, at ingestion (`everything_index/text.py`),
   and the result is logged. Never re-split existing things.
 - If the SQLite tables change, raise `SCHEMA` in `store.py` so it rebuilds.

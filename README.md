@@ -71,6 +71,16 @@ under a property you can choose with `--as`.
 An address reads thing, property, position. `cat.characters.2` is the
 second character of the thing named `cat`.
 
+Numbers are things. Write `#3` for the number three, since a bare `3` is
+the ID of the third thing ingested. Quote it on the command line.
+
+```bash
+python3 -m everything_index show '#3'
+python3 -m everything_index find characters '#3'
+```
+
+`find` returns the things that have every property you list.
+
 ## Tests
 
 ```bash

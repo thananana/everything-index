@@ -87,6 +87,44 @@ Names therefore cannot contain periods.
 Putting a thing into a box without saying what it is uses the general
 property `things`.
 
+## Everything is a property
+
+Thing, property, and index are roles, not kinds. Any thing can play any of
+them depending on the direction of reading. "cat" has the property
+"characters" and the property 3, and those two describe each other: 3 of
+what, and how many characters. A thing is located by where its properties
+intersect.
+
+Whatever the system uses to express a thing has thereby been expressed, so
+it is indexed too. Nothing is invisible machinery. A thing is addressable
+as soon as it is expressible, and gets an ID when it is actually expressed.
+
+## Numbers
+
+- IDs are integers only because integers keep the order of ingestion and
+  are always unique. They have no connection to numbers as things.
+- A number is a thing: the thing whose text is its numeral. It is written
+  `#3` so it is not confused with the ID 3. A numeral met in ingested text
+  is the same thing as the number.
+- When the system uses a number, as a position or a count, the number
+  becomes a thing if it is not one yet.
+- Numbers index themselves: the index named `numbers` holds number n at
+  position n, so `numbers.numbers.7` is `#7`.
+- A number is made of digits, which are numbers: `#12` has the characters
+  `#1` and `#2`. This falls out of the ordinary text rules.
+- Read backwards, a number shows what it counts and what sits at it.
+  Those are read off the tables, not stored.
+
+## Intersection
+
+`find` takes several properties and returns the things that have all of
+them. A thing has a property if the property labels one of its rows, sits
+in one of its rows, or is the count of one of its rows. `find characters
+#3` gives every thing with three characters.
+
+Open point: the terms are checked independently, so a box with 3 drafts
+and some characters elsewhere would also match. Tighten if it matters.
+
 ## How text is broken up
 
 A text gets one property, the largest level that gives more than one part:

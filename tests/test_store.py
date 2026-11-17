@@ -24,8 +24,7 @@ class MasterIndexTest(unittest.TestCase):
 
     def test_same_content_is_the_same_thing(self):
         self.index.ingest_text("hello")
-        count = self.index.count()  # the word, "characters", four letters
-        self.assertEqual(count, 6)
+        count = self.index.count()
         self.assertEqual(self.index.ingest_text("hello"), (1, False))
         self.assertEqual(self.index.count(), count)
 
@@ -214,6 +213,90 @@ class MasterIndexTest(unittest.TestCase):
         self.index.ingest_text("a")
         with self.assertRaises(ValueError):
             self.index.name(1, "a.b")
+
+    # --- numbers ----------------------------------------------------------
+
+    def test_a_number_used_by_the_system_becomes_a_thing(self):
+        self.assertIsNone(self.index.number(3))
+        self.index.ingest_text("cat")  # uses positions 1, 2, 3 and the count 3
+        for n in (1, 2, 3):
+            self.assertEqual(self.text_of(self.index.number(n)), str(n))
+        self.assertIsNone(self.index.number(4))
+
+    def test_numbers_index_themselves(self):
+        self.index.ingest_text("a b c d e f g h i j k l")  # twelve words
+        numbers = self.index.resolve("numbers")
+        row = self.index.row(numbers, numbers)
+        self.assertEqual([self.text_of(i) for i in row], [str(n) for n in range(1, 13)])
+        self.assertEqual(self.index.resolve("numbers.numbers.7"), self.index.number(7))
+        self.assertEqual(self.index.resolve("#7"), self.index.number(7))
+
+    def test_a_number_is_made_of_digits_which_are_numbers(self):
+        self.index.ingest_text("a b c d e f g h i j k l")
+        twelve = self.index.number(12)
+        self.assertEqual(
+            self.index.row(twelve, "characters"),
+            [self.index.number(1), self.index.number(2)],
+        )
+
+    def test_a_numeral_in_text_is_the_same_thing_as_the_number(self):
+        self.index.ingest_text("I have 3 cats")
+        three_in_text = self.index.resolve("1.words.3")
+        self.index.ingest_text("dog")
+        self.assertEqual(self.index.number(3), three_in_text)
+
+    def test_the_id_3_and_the_number_3_are_different(self):
+        self.index.ingest_text("x")
+        self.index.ingest_text("y")
+        self.index.ingest_text("z")
+        self.index.ingest_text("cat")
+        self.assertEqual(self.text_of(self.index.resolve("3")), "z")
+        self.assertEqual(self.text_of(self.index.resolve("#3")), "3")
+        self.assertIsNone(self.index.as_number(3))
+        self.assertEqual(self.index.as_number(self.index.number(3)), 3)
+
+    def test_a_number_read_backwards(self):
+        cat, _ = self.index.ingest_text("cat")
+        characters = self.index.resolve("characters")
+        self.assertIn((cat, characters), self.index.counted_by(3))
+        t = self.index.resolve(f"{cat}.characters.3")
+        self.assertIn((cat, characters, t), self.index.positioned_at(3))
+
+    def test_intersection_of_properties(self):
+        sentence, _ = self.index.ingest_text("the cat sat on a sofa")
+        find = self.index.resolve
+        words = {self.text_of(i): i for i in self.index.row(sentence, "words")}
+        three_characters = self.index.intersect([find("characters"), find("#3")])
+        self.assertEqual(
+            sorted(self.text_of(i) for i in three_characters), ["cat", "sat", "the"]
+        )
+        with_a_and_t = self.index.intersect([find(f"{words['cat']}.characters.2"),
+                                             find(f"{words['cat']}.characters.3")])
+        self.assertEqual(sorted(self.text_of(i) for i in with_a_and_t), ["cat", "sat"])
+        self.assertEqual(self.index.intersect([find("words"), find("#6")]), [sentence])
+
+    def test_numbers_survive_a_rebuild_and_keep_counting(self):
+        self.index.ingest_text("cat")
+        self.index.db.close()
+        (self.root / "data" / "index.db").unlink()
+        self.index = Index(self.root)
+        self.index.ingest_text("horse")
+        numbers = self.index.resolve("numbers")
+        row = self.index.row(numbers, numbers)
+        self.assertEqual([self.text_of(i) for i in row], ["1", "2", "3", "4", "5"])
+
+    def test_a_failed_ingest_does_not_lose_count(self):
+        self.index.ingest_text("cat", name="x")
+        with self.assertRaises(ValueError):
+            self.index.ingest_text("horses", name="x")
+        self.assertIsNone(self.index.number(6))
+        self.index.ingest_text("horses")
+        self.assertEqual(self.text_of(self.index.resolve("numbers.numbers.6")), "6")
+
+    def test_a_name_cannot_start_with_a_hash(self):
+        self.index.ingest_text("a")
+        with self.assertRaises(ValueError):
+            self.index.name(1, "#1")
 
     def test_empty_input_is_refused(self):
         with self.assertRaises(ValueError):

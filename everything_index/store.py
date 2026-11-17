@@ -22,6 +22,13 @@ An address is read left to right, separated by periods: a thing, then a
 property, then a position, and so on. "cat.characters.2" is the letter a.
 A thing or a property may be written as its ID or as its name.
 
+Numbers are things too. The number three is the thing whose text is "3",
+written #3 so it is not confused with the ID 3. Whenever the system uses a
+number, as a position or as a count, that number is made a thing if it is
+not one already. The index named "numbers" holds each number at its own
+position: number n sits at position n. That is how numbers index
+themselves here.
+
 Where the data lives:
 
 - index/log.jsonl   The source of truth. One line per event, only ever
@@ -67,6 +74,7 @@ class Index:
         self.db.row_factory = sqlite3.Row
         self._batch = None
         self._catch_up()
+        self._counted = self._numbers_known()
 
     # --- keeping the database in step with the log -----------------------
 
@@ -185,6 +193,7 @@ class Index:
             self.db.commit()
         except BaseException:
             self.db.rollback()
+            self._counted = self._numbers_known()
             raise
         finally:
             self._batch = None
@@ -221,6 +230,52 @@ class Index:
         self._name(thing_id, name)
         return thing_id
 
+    def _into(self, thing_id: int, property_id: int, items: list[int]):
+        """Add items to a thing under a property, in order."""
+        self._record({
+            "into": thing_id, "as": property_id, "items": items, "time": now(),
+        })
+        # The row now uses the positions 1..n and has the count n, so each
+        # of those numbers has been expressed and must be a thing.
+        self._count_to(self._length(thing_id, property_id))
+
+    def _length(self, thing_id: int, property_id: int) -> int:
+        return self.db.execute(
+            "SELECT COUNT(*) FROM cells WHERE thing = ? AND property = ?",
+            (thing_id, property_id),
+        ).fetchone()[0]
+
+    def _numbers_known(self) -> int:
+        """How far the numbers index reaches: 1, 2, 3 ... up to this."""
+        numbers = self._id_or_name("numbers")
+        return self._length(numbers, numbers) if numbers else 0
+
+    def _count_to(self, n: int):
+        """Make sure every number from 1 to n is a thing, at its own position."""
+        if n <= self._counted:
+            return
+        numbers = self._property("numbers")
+        first, new = self._counted + 1, []
+        for k in range(first, n + 1):
+            self._counted = k  # set first: making "12" uses positions 1 and 2
+            new.append(self._text_thing(str(k))[0])
+        self._record({
+            "into": numbers, "as": numbers, "items": new, "time": now(),
+        })
+
+    def number(self, n: int) -> int | None:
+        """The thing that is the number n, if it exists yet."""
+        sha = hashlib.sha256(str(int(n)).encode("utf-8")).hexdigest()
+        return self._by_content(sha)
+
+    def as_number(self, thing_id: int) -> int | None:
+        """The number a thing is, or None if it is not a number."""
+        thing = self.get(thing_id)
+        text = thing["text"] if thing and thing["kind"] == "text" else None
+        if text and text.isascii() and text.isdigit() and str(int(text)) == text:
+            return int(text)
+        return None
+
     def _text_thing(self, text: str, source: str | None = None) -> tuple[int, bool]:
         """The thing for this exact text, creating it and its parts if new."""
         data = text.encode("utf-8")
@@ -235,10 +290,7 @@ class Index:
         if parts:
             property_id = self._property(kind_of_part)
             items = [self._text_thing(part)[0] for part in parts]
-            self._record({
-                "into": thing_id, "as": property_id, "items": items,
-                "time": now(),
-            })
+            self._into(thing_id, property_id, items)
         return thing_id, True
 
     def ingest_text(self, text: str, name: str | None = None,
@@ -314,10 +366,7 @@ class Index:
                 as_property = self._property(as_property)
             elif self.get(as_property) is None:
                 raise ValueError(f"there is no thing {as_property}")
-            self._record({
-                "into": into, "as": as_property, "items": [item],
-                "time": now(),
-            })
+            self._into(into, as_property, [item])
         return f"{into}.{as_property}.{len(self.row(into, as_property))}"
 
     # --- naming -----------------------------------------------------------
@@ -329,6 +378,8 @@ class Index:
             raise ValueError("a name cannot be only digits; those are IDs")
         if "." in name:
             raise ValueError("a name cannot contain a period; periods separate addresses")
+        if name.startswith("#"):
+            raise ValueError("a name cannot start with #; that marks a number")
         row = self.db.execute(
             "SELECT id FROM names WHERE name = ?", (name,)
         ).fetchone()
@@ -353,6 +404,8 @@ class Index:
         return self.db.execute("SELECT COUNT(*) FROM things").fetchone()[0]
 
     def _id_or_name(self, word: str) -> int | None:
+        if word.startswith("#"):
+            return self.number(word[1:]) if word[1:].isdigit() else None
         if word.isdigit():
             return int(word) if self.get(int(word)) else None
         row = self.db.execute(
@@ -458,6 +511,55 @@ class Index:
             "SELECT COUNT(DISTINCT thing) FROM cells WHERE property = ?",
             (property_id,),
         ).fetchone()[0]
+
+    # --- numbers read backwards -------------------------------------------
+
+    def counted_by(self, n: int, limit: int | None = None) -> list[tuple[int, int]]:
+        """Every (thing, property) that has exactly n items."""
+        query = (
+            "SELECT thing, property FROM cells GROUP BY thing, property"
+            " HAVING COUNT(*) = ? ORDER BY thing, property"
+        )
+        if limit:
+            query += f" LIMIT {int(limit)}"
+        return [(r["thing"], r["property"]) for r in self.db.execute(query, (n,))]
+
+    def positioned_at(self, n: int, limit: int | None = None) -> list[tuple[int, int, int]]:
+        """Every (thing, property, item) where the item sits at position n."""
+        query = (
+            "SELECT thing, property, item FROM cells WHERE position = ?"
+            " ORDER BY thing, property"
+        )
+        if limit:
+            query += f" LIMIT {int(limit)}"
+        return [
+            (r["thing"], r["property"], r["item"])
+            for r in self.db.execute(query, (n,))
+        ]
+
+    # --- intersection -----------------------------------------------------
+
+    def having(self, property_id: int) -> set[int]:
+        """Every thing that has this thing as a property.
+
+        A thing has a property when the property labels one of its rows,
+        sits in one of its rows, or is the number of items in one of its rows.
+        """
+        found = {
+            r[0] for r in self.db.execute(
+                "SELECT thing FROM cells WHERE property = ?1 OR item = ?1",
+                (property_id,),
+            )
+        }
+        n = self.as_number(property_id)
+        if n is not None:
+            found.update(thing for thing, _ in self.counted_by(n))
+        return found
+
+    def intersect(self, property_ids: list[int]) -> list[int]:
+        """The things that have every one of these properties."""
+        sets = [self.having(p) for p in property_ids]
+        return sorted(set.intersection(*sets)) if sets else []
 
     def recent(self, limit: int = 20) -> list[dict]:
         ids = self.db.execute(

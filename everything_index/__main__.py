@@ -9,11 +9,15 @@
     python3 -m everything_index put idea projects --as drafts
     python3 -m everything_index show 1            (or: show idea)
     python3 -m everything_index show idea.words.2
+    python3 -m everything_index show '#3'           (the number three)
+    python3 -m everything_index find characters '#3'  (things with both)
     python3 -m everything_index name 1 idea
     python3 -m everything_index list
 
 Anywhere a thing is asked for you can give an ID, a name, or an address.
 An address reads thing.property.position, for example cat.characters.2.
+A number as a thing is written with #, so #3 is three and 3 is the ID 3.
+Put quotes around anything with # in it.
 """
 
 import argparse
@@ -86,6 +90,25 @@ def show(index: Index, thing_id: int):
         if total > SHOWN:
             print(f"  … and {total - SHOWN} more")
 
+    n = index.as_number(thing_id)
+    if n is not None:
+        rows = index.counted_by(n, SHOWN + 1)
+        if rows:
+            print(f"\nis the count of")
+            for holder, property_id in rows[:SHOWN]:
+                word = spoken(index, property_id)
+                print(f"  {n} {word:<14} in  {labelled(index, holder)}")
+            if len(rows) > SHOWN:
+                print("  … and more")
+        cells = index.positioned_at(n, SHOWN + 1)
+        if cells:
+            print(f"\nis the position of")
+            for holder, property_id, item in cells[:SHOWN]:
+                address = f"{holder}.{spoken(index, property_id)}.{n}"
+                print(f"  {address:<22} {labelled(index, item)}")
+            if len(cells) > SHOWN:
+                print("  … and more")
+
     total = index.holder_count(thing_id)
     if total:
         print(f"\nis a property of {total} thing{'' if total == 1 else 's'}")
@@ -116,6 +139,9 @@ def main(argv=None) -> int:
 
     p = commands.add_parser("show", help="show one thing")
     p.add_argument("address", help="an ID, a name, or an address like cat.characters.2")
+
+    p = commands.add_parser("find", help="things that have all the given properties")
+    p.add_argument("properties", nargs="+")
 
     p = commands.add_parser("name", help="give a thing a name")
     p.add_argument("address")
@@ -160,6 +186,14 @@ def main(argv=None) -> int:
 
         elif args.command == "show":
             show(index, find(index, args.address))
+
+        elif args.command == "find":
+            found = index.intersect([find(index, a) for a in args.properties])
+            for thing_id in found[:SHOWN]:
+                print(f"{thing_id:>6}  {labelled(index, thing_id)}")
+            if len(found) > SHOWN:
+                print(f"     … and {len(found) - SHOWN} more")
+            print(f"{len(found)} thing{'' if len(found) == 1 else 's'}")
 
         elif args.command == "name":
             thing_id = find(index, args.address)

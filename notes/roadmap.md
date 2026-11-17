@@ -7,7 +7,8 @@ Each step ends with something that runs and is pushed.
 1. **Master index. DONE.** Ingest a piece of text, get the next integer. Optional
    name. Time created recorded automatically. Same content returns the
    same ID. Stored as an append-only log in plain text, in git.
-2. **Text decomposition, tables, addresses. DONE.** Ingested text is broken into sentences, words,
+2. **Text decomposition, property tables, addresses, numbers as things,
+   intersection lookup. DONE.** Ingested text is broken into sentences, words,
    characters. Each distinct one is a thing. Each thing's table lists its
    contents by position. Looking up a word shows all its instances.
 3. **Syntax.** Parser for brackets, frames, and names.
