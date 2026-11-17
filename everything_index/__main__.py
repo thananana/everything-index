@@ -6,12 +6,14 @@
     python3 -m everything_index ingest -          (reads text you pipe in)
     python3 -m everything_index new projects      (an empty named index)
     python3 -m everything_index put idea projects (put one thing in another)
-    python3 -m everything_index show 1            (or: show idea, show 1.2)
+    python3 -m everything_index put idea projects --as drafts
+    python3 -m everything_index show 1            (or: show idea)
+    python3 -m everything_index show idea.words.2
     python3 -m everything_index name 1 idea
     python3 -m everything_index list
 
-Anywhere a thing is asked for you can give an ID, a name, or an address
-such as 5.2, meaning whatever is at position 2 of thing 5.
+Anywhere a thing is asked for you can give an ID, a name, or an address.
+An address reads thing.property.position, for example cat.characters.2.
 """
 
 import argparse
@@ -38,6 +40,12 @@ def labelled(index: Index, thing_id: int) -> str:
     return f"{preview(thing)}{names}"
 
 
+def spoken(index: Index, thing_id: int) -> str:
+    """A thing's first name if it has one, otherwise its ID."""
+    names = index.get(thing_id)["names"]
+    return names[0] if names else str(thing_id)
+
+
 def find(index: Index, address: str) -> int:
     thing_id = index.resolve(address)
     if thing_id is None:
@@ -59,21 +67,31 @@ def show(index: Index, thing_id: int):
         print()
         print(thing["text"])
 
-    contents = index.contents(thing_id)
-    if contents:
-        print(f"\ncontains {len(contents)}")
-        for position, item in enumerate(contents[:SHOWN], start=1):
-            address = f"{thing_id}.{position}"
-            print(f"  {address:<10} {item:>6}  {labelled(index, item)}")
-        if len(contents) > SHOWN:
-            print(f"  … and {len(contents) - SHOWN} more")
+    for property_id, count in index.properties(thing_id):
+        word = spoken(index, property_id)
+        print(f"\n{word}  {count}")
+        items = index.row(thing_id, property_id)
+        for position, item in enumerate(items[:SHOWN], start=1):
+            address = f"{thing_id}.{word}.{position}"
+            print(f"  {address:<22} {item:>6}  {labelled(index, item)}")
+        if count > SHOWN:
+            print(f"  … and {count - SHOWN} more")
 
     total = index.instance_count(thing_id)
     if total:
         print(f"\nappears in {total} place{'' if total == 1 else 's'}")
-        for container, position in index.instances(thing_id, SHOWN):
-            address = f"{container}.{position}"
-            print(f"  {address:<10} in  {labelled(index, container)}")
+        for holder, property_id, position in index.instances(thing_id, SHOWN):
+            address = f"{holder}.{spoken(index, property_id)}.{position}"
+            print(f"  {address:<22} in  {labelled(index, holder)}")
+        if total > SHOWN:
+            print(f"  … and {total - SHOWN} more")
+
+    total = index.holder_count(thing_id)
+    if total:
+        print(f"\nis a property of {total} thing{'' if total == 1 else 's'}")
+        for holder in index.holders(thing_id, SHOWN):
+            count = len(index.row(holder, thing_id))
+            print(f"  {holder:>6}  {count:>4} in  {labelled(index, holder)}")
         if total > SHOWN:
             print(f"  … and {total - SHOWN} more")
 
@@ -93,9 +111,11 @@ def main(argv=None) -> int:
     p = commands.add_parser("put", help="put one thing into another")
     p.add_argument("item")
     p.add_argument("into")
+    p.add_argument("--as", dest="as_property", default="things",
+                   help="what the item is to its holder (default: things)")
 
     p = commands.add_parser("show", help="show one thing")
-    p.add_argument("address", help="an ID, a name, or an address like 5.2")
+    p.add_argument("address", help="an ID, a name, or an address like cat.characters.2")
 
     p = commands.add_parser("name", help="give a thing a name")
     p.add_argument("address")
@@ -130,8 +150,13 @@ def main(argv=None) -> int:
             print(f"{thing_id}  new index")
 
         elif args.command == "put":
-            address = index.put(find(index, args.item), find(index, args.into))
-            print(f"now at {address}")
+            item, into = find(index, args.item), find(index, args.into)
+            known = index.resolve(args.as_property)
+            index.put(item, into, known if known else args.as_property)
+            property_id = index.resolve(args.as_property)
+            word = spoken(index, property_id)
+            position = len(index.row(into, property_id))
+            print(f"now at {spoken(index, into)}.{word}.{position}")
 
         elif args.command == "show":
             show(index, find(index, args.address))

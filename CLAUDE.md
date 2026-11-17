@@ -22,9 +22,12 @@ core data model (thing / property / index, everything gets a stable ID).
   Never rewrite or reorder it. IDs are integers in order of ingestion.
 - `data/index.db` is SQLite, rebuilt from the log automatically. Never commit it.
 - A thing is identified by its raw bytes (SHA-256). Same bytes, same ID.
-- Every thing has an ordered table of the things it contains (`cells` in
-  SQLite, `into` events in the log). Where a thing appears is the same table
-  read by item. Do not add a separate structure for relationships.
+- Every thing has a table: properties, and under each property an ordered
+  row of items. One cell is holder, property, position, item (`cells` in
+  SQLite; `into` / `as` / `items` events in the log). A property is itself
+  a thing. Where a thing appears is the same table read by item. Do not add
+  a separate structure for relationships.
+- Addresses read thing.property.position, e.g. `cat.characters.2`.
 - Text is split into parts once, at ingestion (`everything_index/text.py`),
   and the result is logged. Never re-split existing things.
 - If the SQLite tables change, raise `SCHEMA` in `store.py` so it rebuilds.

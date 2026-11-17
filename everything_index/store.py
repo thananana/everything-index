@@ -10,12 +10,17 @@ There are two ways a thing comes to exist:
 - By naming. An empty index is created as an anchor. Its ID and name stay
   fixed while what it contains is free to change.
 
-Every thing has a table: the ordered list of the things it contains.
+Every thing has a table. Each row of the table is one property, and a
+property is itself a thing, such as the index named "characters". Under a
+property sit the items, in order. So the word "cat" has the property
+"characters", and under it c, a, t at positions 1, 2, 3.
+
 Where a thing appears in other tables is the same information read the
 other way round, so it is never stored separately.
 
-An address is an ID or name followed by positions, separated by periods.
-"5.2" is whatever sits at position 2 of thing 5. "5.2.1" goes one deeper.
+An address is read left to right, separated by periods: a thing, then a
+property, then a position, and so on. "cat.characters.2" is the letter a.
+A thing or a property may be written as its ID or as its name.
 
 Where the data lives:
 
@@ -37,7 +42,7 @@ from pathlib import Path
 from . import text as text_parts
 
 REPO = Path(__file__).resolve().parent.parent
-SCHEMA = 2  # raise this when the tables below change; the database rebuilds
+SCHEMA = 3  # raise this when the tables below change; the database rebuilds
 
 
 def home() -> Path:
@@ -89,11 +94,13 @@ class Index:
             -- One row per cell of every thing's table.
             CREATE TABLE cells (
                 thing    INTEGER NOT NULL,
+                property INTEGER NOT NULL,
                 position INTEGER NOT NULL,
                 item     INTEGER NOT NULL,
-                PRIMARY KEY (thing, position)
+                PRIMARY KEY (thing, property, position)
             );
             CREATE INDEX cells_by_item ON cells (item);
+            CREATE INDEX cells_by_property ON cells (property, thing);
             CREATE TABLE meta (key TEXT PRIMARY KEY, value INTEGER);
             INSERT INTO meta VALUES ('log_offset', 0);
             INSERT INTO meta VALUES ('schema', {SCHEMA});
@@ -139,13 +146,14 @@ class Index:
             )
         elif "into" in event:
             position = self.db.execute(
-                "SELECT COALESCE(MAX(position), 0) FROM cells WHERE thing = ?",
-                (event["into"],),
+                "SELECT COALESCE(MAX(position), 0) FROM cells"
+                " WHERE thing = ? AND property = ?",
+                (event["into"], event["as"]),
             ).fetchone()[0]
             self.db.executemany(
-                "INSERT INTO cells VALUES (?, ?, ?)",
+                "INSERT INTO cells VALUES (?, ?, ?, ?)",
                 [
-                    (event["into"], position + n, item)
+                    (event["into"], event["as"], position + n, item)
                     for n, item in enumerate(event["items"], start=1)
                 ],
             )
@@ -201,6 +209,18 @@ class Index:
         self._record(event)
         return thing_id
 
+    def _property(self, name: str) -> int:
+        """The index with this name, created the first time it is needed."""
+        row = self.db.execute(
+            "SELECT id FROM names WHERE name = ?", (name,)
+        ).fetchone()
+        if row:
+            return row["id"]
+        self._check_name(name, None)
+        thing_id = self._mint("index")
+        self._name(thing_id, name)
+        return thing_id
+
     def _text_thing(self, text: str, source: str | None = None) -> tuple[int, bool]:
         """The thing for this exact text, creating it and its parts if new."""
         data = text.encode("utf-8")
@@ -211,9 +231,14 @@ class Index:
         thing_id = self._mint(
             "text", sha256=sha, size=len(data), text=text, source=source
         )
-        items = [self._text_thing(part)[0] for part in text_parts.parts(text)]
-        if items:
-            self._record({"into": thing_id, "items": items, "time": now()})
+        kind_of_part, parts = text_parts.parts(text)
+        if parts:
+            property_id = self._property(kind_of_part)
+            items = [self._text_thing(part)[0] for part in parts]
+            self._record({
+                "into": thing_id, "as": property_id, "items": items,
+                "time": now(),
+            })
         return thing_id, True
 
     def ingest_text(self, text: str, name: str | None = None,
@@ -274,14 +299,26 @@ class Index:
                 self._name(thing_id, name)
         return thing_id
 
-    def put(self, item: int, into: int) -> str:
-        """Put a thing into another thing's table. Returns its new address."""
+    def put(self, item: int, into: int, as_property: int | str = "things") -> str:
+        """Put a thing into another thing, under a property.
+
+        The property says what the item is to the thing that holds it. It
+        can be an ID, or a name, which is created if it does not exist yet.
+        Returns the item's new address.
+        """
         for thing_id in (item, into):
             if self.get(thing_id) is None:
                 raise ValueError(f"there is no thing {thing_id}")
         with self._writing():
-            self._record({"into": into, "items": [item], "time": now()})
-        return f"{into}.{len(self.contents(into))}"
+            if isinstance(as_property, str):
+                as_property = self._property(as_property)
+            elif self.get(as_property) is None:
+                raise ValueError(f"there is no thing {as_property}")
+            self._record({
+                "into": into, "as": as_property, "items": [item],
+                "time": now(),
+            })
+        return f"{into}.{as_property}.{len(self.row(into, as_property))}"
 
     # --- naming -----------------------------------------------------------
 
@@ -315,26 +352,32 @@ class Index:
     def count(self) -> int:
         return self.db.execute("SELECT COUNT(*) FROM things").fetchone()[0]
 
+    def _id_or_name(self, word: str) -> int | None:
+        if word.isdigit():
+            return int(word) if self.get(int(word)) else None
+        row = self.db.execute(
+            "SELECT id FROM names WHERE name = ?", (word,)
+        ).fetchone()
+        return row["id"] if row else None
+
     def resolve(self, address: str) -> int | None:
         """Turn an address into an ID.
 
-        The first part is an ID or a name. Each part after a period is a
-        position in the table of the thing before it.
+        The first part is a thing, as an ID or a name. After that the parts
+        come in pairs: a property, then a position under that property.
         """
-        first, *positions = str(address).split(".")
-        if first.isdigit():
-            thing_id = int(first) if self.get(int(first)) else None
-        else:
-            row = self.db.execute(
-                "SELECT id FROM names WHERE name = ?", (first,)
-            ).fetchone()
-            thing_id = row["id"] if row else None
-        for position in positions:
-            if thing_id is None or not position.isdigit():
+        first, *steps = str(address).split(".")
+        thing_id = self._id_or_name(first)
+        if len(steps) % 2:
+            return None  # stops on a property, with no position after it
+        for property_word, position in zip(steps[::2], steps[1::2]):
+            property_id = self._id_or_name(property_word)
+            if thing_id is None or property_id is None or not position.isdigit():
                 return None
             row = self.db.execute(
-                "SELECT item FROM cells WHERE thing = ? AND position = ?",
-                (thing_id, int(position)),
+                "SELECT item FROM cells"
+                " WHERE thing = ? AND property = ? AND position = ?",
+                (thing_id, property_id, int(position)),
             ).fetchone()
             thing_id = row["item"] if row else None
         return thing_id
@@ -363,25 +406,57 @@ class Index:
             return b""
         return (self.files_dir / thing["sha256"]).read_bytes()
 
-    def contents(self, thing_id: int) -> list[int]:
-        """A thing's table: the IDs it contains, in order."""
+    def properties(self, thing_id: int) -> list[tuple[int, int]]:
+        """A thing's properties, as (property, how many items under it)."""
         return [
-            r["item"] for r in self.db.execute(
-                "SELECT item FROM cells WHERE thing = ? ORDER BY position",
+            (r["property"], r["n"]) for r in self.db.execute(
+                "SELECT property, COUNT(*) AS n FROM cells WHERE thing = ?"
+                " GROUP BY property ORDER BY MIN(rowid)",
                 (thing_id,),
             )
         ]
 
-    def instances(self, thing_id: int, limit: int | None = None) -> list[tuple[int, int]]:
-        """Everywhere a thing appears, as (containing thing, position)."""
-        query = "SELECT thing, position FROM cells WHERE item = ? ORDER BY thing, position"
+    def row(self, thing_id: int, property_id: int | str) -> list[int]:
+        """The items a thing holds under one property, in order."""
+        if isinstance(property_id, str):
+            property_id = self._id_or_name(property_id)
+        return [
+            r["item"] for r in self.db.execute(
+                "SELECT item FROM cells WHERE thing = ? AND property = ?"
+                " ORDER BY position",
+                (thing_id, property_id),
+            )
+        ]
+
+    def instances(self, thing_id: int, limit: int | None = None) -> list[tuple[int, int, int]]:
+        """Everywhere a thing appears, as (holder, property, position)."""
+        query = (
+            "SELECT thing, property, position FROM cells WHERE item = ?"
+            " ORDER BY thing, property, position"
+        )
         if limit:
             query += f" LIMIT {int(limit)}"
-        return [(r["thing"], r["position"]) for r in self.db.execute(query, (thing_id,))]
+        return [
+            (r["thing"], r["property"], r["position"])
+            for r in self.db.execute(query, (thing_id,))
+        ]
 
     def instance_count(self, thing_id: int) -> int:
         return self.db.execute(
             "SELECT COUNT(*) FROM cells WHERE item = ?", (thing_id,)
+        ).fetchone()[0]
+
+    def holders(self, property_id: int, limit: int | None = None) -> list[int]:
+        """The things that have this thing as a property."""
+        query = "SELECT DISTINCT thing FROM cells WHERE property = ? ORDER BY thing"
+        if limit:
+            query += f" LIMIT {int(limit)}"
+        return [r["thing"] for r in self.db.execute(query, (property_id,))]
+
+    def holder_count(self, property_id: int) -> int:
+        return self.db.execute(
+            "SELECT COUNT(DISTINCT thing) FROM cells WHERE property = ?",
+            (property_id,),
         ).fetchone()[0]
 
     def recent(self, limit: int = 20) -> list[dict]:

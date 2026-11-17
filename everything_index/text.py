@@ -28,11 +28,15 @@ def characters(text: str) -> list[str]:
     return list(text) if len(text) > 1 else []
 
 
-def parts(text: str) -> list[str]:
-    """The parts of a text, in order. Empty for a single character."""
+def parts(text: str) -> tuple[str, list[str]]:
+    """What kind of parts a text has, and the parts in order.
+
+    For "cat" this is ("characters", ["c", "a", "t"]). A single character
+    has no parts, so the list comes back empty.
+    """
     for split in (paragraphs, sentences, words, characters):
         found = [p.strip() if split is not characters else p for p in split(text)]
         found = [p for p in found if p]
         if found and found != [text]:
-            return found
-    return []
+            return split.__name__, found
+    return "", []

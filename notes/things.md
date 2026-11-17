@@ -58,23 +58,42 @@ move whenever its surroundings do. The resolution used in the code:
 - So a name maps to exactly one ID, but what that name gathers is many
   things and is not fixed.
 
-## Parents, children, sequence
+## Tables have rows, and a row is a property
 
-A table is ordered. Being in a table is the parent and child relation, and
-the position is the sequence. Both are kept exactly, and a thing may sit in
-the same table more than once.
+A thing does not hold a flat list. It holds properties, and under each
+property a sequence of items. The word "cat" has the property
+"characters", and under it c, a, t. Saying "cat has 3" is incomplete:
+it has 3 characters, and "characters" is itself a thing in the index.
+
+- The property says what kind of thing the items are to their holder.
+  At scale a thing has many kinds: characters, words, a description, a
+  source, drafts, and so on.
+- A property is an ordinary thing, usually an index made by naming. It is
+  created the first time it is needed.
+- The count under a property is read off the table, never stored.
+- Read the other way, a property is the index of every thing that has it.
+  "characters" lists everything that has characters.
+
+So one cell is: holder, property, position, item. Parent and child is
+holder and item. Sequence is position. Kind is property.
 
 ## Addresses
 
-Periods separate the steps of an address. `5.2` is whatever sits at
-position 2 of thing 5, and `5.2.1` goes one level deeper. The first step
-may be a name. Names therefore cannot contain periods.
+Periods separate the steps: thing, property, position, and so on.
+`cat.characters.2` is the letter a. `story.sentences.2.words.1` goes two
+levels down. A thing or a property can be written as an ID or a name.
+Names therefore cannot contain periods.
+
+Putting a thing into a box without saying what it is uses the general
+property `things`.
 
 ## How text is broken up
 
-At the largest level that gives more than one part: paragraphs, then
-sentences, then words and punctuation marks, then characters. Spaces are
-not kept as things. Sentence detection is simple and will misjudge
+A text gets one property, the largest level that gives more than one part:
+paragraphs, then sentences, then words, then characters. Deeper levels are
+reached by walking down, so a paragraph's words are found through its
+sentences. Punctuation marks sit in the words row so the sequence stays
+exact. Spaces are not kept as things. Sentence detection is simple and will misjudge
 abbreviations such as "e.g."; the rules live in `everything_index/text.py`.
 Parts are decided once, at ingestion, and written to the log, so changing
 the rules later never disturbs existing IDs.

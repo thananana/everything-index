@@ -24,8 +24,8 @@ class MasterIndexTest(unittest.TestCase):
 
     def test_same_content_is_the_same_thing(self):
         self.index.ingest_text("hello")
-        count = self.index.count()  # the word and its four distinct letters
-        self.assertEqual(count, 5)
+        count = self.index.count()  # the word, "characters", four letters
+        self.assertEqual(count, 6)
         self.assertEqual(self.index.ingest_text("hello"), (1, False))
         self.assertEqual(self.index.count(), count)
 
@@ -78,14 +78,15 @@ class MasterIndexTest(unittest.TestCase):
         self.index.ingest_text("the cat sat", name="uno")
         box = self.index.new_index("box")
         self.index.put(1, box)
-        before = (self.index.count(), self.index.contents(1), self.index.contents(box))
+        before = (self.index.count(), self.index.row(1, "words"), self.index.row(box, "things"))
         self.index.db.close()
         (self.root / "data" / "index.db").unlink()
         self.index = Index(self.root)
-        after = (self.index.count(), self.index.contents(1), self.index.contents(box))
+        after = (self.index.count(), self.index.row(1, "words"), self.index.row(box, "things"))
         self.assertEqual(before, after)
+        self.assertEqual(len(before[1]), 3)
         self.assertEqual(self.index.resolve("uno"), 1)
-        self.assertEqual(self.index.resolve("box.1"), 1)
+        self.assertEqual(self.index.resolve("box.things.1"), 1)
 
     def test_database_catches_up_with_new_log_lines(self):
         self.index.ingest_text("a")
@@ -96,57 +97,74 @@ class MasterIndexTest(unittest.TestCase):
         self.index = Index(self.root)
         self.assertEqual(self.index.count(), 2)
 
-    # --- step 2: tables, parts, instances, addresses ----------------------
+    # --- tables, properties, instances, addresses ------------------------
 
-    def test_a_sentence_contains_its_words_in_order(self):
-        self.index.ingest_text("the cat sat")
-        words = [self.text_of(i) for i in self.index.contents(1)]
-        self.assertEqual(words, ["the", "cat", "sat"])
+    def texts(self, thing_id, property_name):
+        return [self.text_of(i) for i in self.index.row(thing_id, property_name)]
 
-    def test_a_word_contains_its_characters(self):
+    def test_a_word_has_characters_as_a_property(self):
         self.index.ingest_text("cat")
-        self.assertEqual(
-            [self.text_of(i) for i in self.index.contents(1)], ["c", "a", "t"]
-        )
+        characters = self.index.resolve("characters")
+        self.assertEqual(self.index.properties(1), [(characters, 3)])
+        self.assertEqual(self.texts(1, "characters"), ["c", "a", "t"])
+        self.assertEqual(self.index.get(characters)["kind"], "index")
 
-    def test_a_character_contains_nothing(self):
+    def test_a_sentence_has_words_in_order(self):
+        self.index.ingest_text("the cat sat")
+        self.assertEqual(self.texts(1, "words"), ["the", "cat", "sat"])
+        self.assertEqual(self.index.row(1, "characters"), [])
+
+    def test_a_character_has_no_properties(self):
         self.index.ingest_text("a")
-        self.assertEqual(self.index.contents(1), [])
+        self.assertEqual(self.index.properties(1), [])
 
     def test_a_shared_word_is_one_thing_with_two_instances(self):
         first, _ = self.index.ingest_text("the cat sat")
         second, _ = self.index.ingest_text("the cat ran")
-        the = self.index.resolve(f"{first}.1")
-        self.assertEqual(self.index.resolve(f"{second}.1"), the)
-        self.assertEqual(self.index.instances(the), [(first, 1), (second, 1)])
+        words = self.index.resolve("words")
+        the = self.index.resolve(f"{first}.words.1")
+        self.assertEqual(self.index.resolve(f"{second}.words.1"), the)
+        self.assertEqual(
+            self.index.instances(the), [(first, words, 1), (second, words, 1)]
+        )
 
     def test_a_repeated_word_keeps_every_position(self):
         self.index.ingest_text("no no yes")
-        no = self.index.resolve("1.1")
-        self.assertEqual(self.index.instances(no), [(1, 1), (1, 2)])
+        words = self.index.resolve("words")
+        no = self.index.resolve("1.words.1")
+        self.assertEqual(self.index.instances(no), [(1, words, 1), (1, words, 2)])
 
     def test_paragraphs_sentences_words(self):
         self.index.ingest_text("One two. Three four!\n\nFive six.")
-        paragraphs = self.index.contents(1)
         self.assertEqual(
-            [self.text_of(i) for i in paragraphs],
-            ["One two. Three four!", "Five six."],
+            self.texts(1, "paragraphs"), ["One two. Three four!", "Five six."]
         )
-        sentences = self.index.contents(paragraphs[0])
-        self.assertEqual(
-            [self.text_of(i) for i in sentences], ["One two.", "Three four!"]
-        )
-        self.assertEqual(
-            [self.text_of(i) for i in self.index.contents(sentences[0])],
-            ["One", "two", "."],
-        )
+        first = self.index.resolve("1.paragraphs.1")
+        self.assertEqual(self.texts(first, "sentences"), ["One two.", "Three four!"])
+        sentence = self.index.resolve("1.paragraphs.1.sentences.1")
+        self.assertEqual(self.texts(sentence, "words"), ["One", "two", "."])
 
-    def test_period_addresses_walk_down_the_tables(self):
+    def test_addresses_read_thing_property_position(self):
         self.index.ingest_text("One two. Three four!", name="doc")
-        self.assertEqual(self.text_of(self.index.resolve("doc.2")), "Three four!")
-        self.assertEqual(self.text_of(self.index.resolve("1.2.1")), "Three")
-        self.assertEqual(self.text_of(self.index.resolve("1.2.1.2")), "h")
-        self.assertIsNone(self.index.resolve("1.9"))
+        find = self.index.resolve
+        self.assertEqual(self.text_of(find("doc.sentences.2")), "Three four!")
+        self.assertEqual(self.text_of(find("doc.sentences.2.words.1")), "Three")
+        self.assertEqual(
+            self.text_of(find("doc.sentences.2.words.1.characters.2")), "h"
+        )
+        by_id = f"1.{find('sentences')}.2"  # a property may be given as an ID
+        self.assertEqual(find(by_id), find("doc.sentences.2"))
+        self.assertIsNone(find("doc.sentences.9"))
+        self.assertIsNone(find("doc.words.1"))   # doc has sentences, not words
+        self.assertIsNone(find("doc.sentences"))  # no position given
+
+    def test_a_property_knows_what_holds_it(self):
+        self.index.ingest_text("cat")
+        self.index.ingest_text("dog")
+        characters = self.index.resolve("characters")
+        self.assertEqual(len(self.index.holders(characters)), 2)
+        self.assertIn(1, self.index.holders(characters))
+        self.assertEqual(self.index.holder_count(characters), 2)
 
     def test_reingesting_adds_nothing(self):
         self.index.ingest_text("the cat sat")
@@ -160,12 +178,26 @@ class MasterIndexTest(unittest.TestCase):
         box = self.index.new_index("projects")
         a, _ = self.index.ingest_text("a")
         b, _ = self.index.ingest_text("b")
-        self.assertEqual(self.index.put(a, box), f"{box}.1")
-        self.assertEqual(self.index.put(b, box), f"{box}.2")
-        self.assertEqual(self.index.contents(box), [a, b])
-        self.assertEqual(self.index.resolve("projects"), box)
-        self.assertEqual(self.index.resolve("projects.2"), b)
-        self.assertEqual(self.index.instances(a), [(box, 1)])
+        self.index.put(a, box)
+        self.index.put(b, box)
+        things = self.index.resolve("things")
+        self.assertEqual(self.index.row(box, "things"), [a, b])
+        self.assertEqual(self.index.resolve("projects.things.2"), b)
+        self.assertEqual(self.index.instances(a), [(box, things, 1)])
+
+    def test_put_under_a_chosen_property(self):
+        box = self.index.new_index("projects")
+        a, _ = self.index.ingest_text("a")
+        b, _ = self.index.ingest_text("b")
+        self.index.put(a, box, "drafts")  # the name is created on first use
+        self.index.put(b, box, "done")
+        self.index.put(b, box, "drafts")
+        drafts, done = self.index.resolve("drafts"), self.index.resolve("done")
+        self.assertEqual(self.index.properties(box), [(drafts, 2), (done, 1)])
+        self.assertEqual(self.index.row(box, "drafts"), [a, b])
+        self.assertEqual(self.index.resolve("projects.done.1"), b)
+        self.index.put(a, box, done)  # a property may also be given as an ID
+        self.assertEqual(self.index.row(box, "done"), [b, a])
 
     def test_two_empty_indexes_are_different_things(self):
         self.assertNotEqual(self.index.new_index(), self.index.new_index())
@@ -175,8 +207,8 @@ class MasterIndexTest(unittest.TestCase):
         image.write_bytes(b"\x89PNG\r\n\x1a\n\x00\xff\xfe")
         picture, _ = self.index.ingest_file(image)
         caption, _ = self.index.ingest_text("diagram for personal OS")
-        self.index.put(caption, picture)
-        self.assertEqual(self.index.contents(picture), [caption])
+        self.index.put(caption, picture, "description")
+        self.assertEqual(self.index.row(picture, "description"), [caption])
 
     def test_a_name_cannot_contain_a_period(self):
         self.index.ingest_text("a")
