@@ -7,33 +7,51 @@ Design notes. Distilled, not verbatim.
 The owner's things are scattered across many apps. The goal is one place
 where anything can be thrown in and ingested, and ingestion gives it an ID.
 
-## What a thing is
+## The model
 
-- A thing is whatever is worth recognizing and naming at all.
-- Things gather other things around them and grow, like planets.
-- A thing's properties are themselves things.
-- Many properties are precomputable from the raw material at ingestion.
+- **Master index.** Every identified thing gets the next integer, in order
+  of ingestion. Position in the master index is the ID. It is a
+  computational object and is not meant to be read by a person.
+- **Names.** A thing may be named or left unnamed. A name is equivalent to
+  the ID it names.
+- **Every thing identifies a table.** The table lists what the thing
+  contains, by position. Cells hold IDs. So an address is "name, position",
+  and it resolves to another ID.
+- **Properties are contents.** Anything specified about a thing becomes one
+  of its properties, and a property is a thing listed in its table. Type,
+  source, and time created are added automatically at ingestion.
+- **Instances are the same fact read the other way.** If a thing appears in
+  several tables, those appearances are its instances. A word is the index
+  of everywhere it occurs. Nothing extra is stored for this.
+- **Identity by sameness.** If the same content turns up twice, it is one
+  thing with two instances, never two things.
+- **Relationships are things.** To preserve a relationship, make it a thing
+  that contains its participants. There are no triples and no edges.
+- **Views.** Any property can be switched on or off in the environment
+  where things are viewed.
 
-## Language is a precomputable property
+## The math analogy
 
-Every character, word, sentence, paragraph, heading, and document is a
-thing. A word is an index of all its instances. Each instance is the context
-in which the word appears, and that context is both semantic (its meaning
-there) and computational (its position in a document, its neighbors).
+Numbers index themselves: n sits at position n. An expression such as
+3 + 4 is an address: the table named "+", at the position given by 3 and 4.
+Here, naming creates the tables, integers give the positions, and cells
+hold integers. Identity, position, and function share one substrate.
 
-Technically this is an inverted index with positions, which is well
-understood. The design twist is that the entries are first-class things with
-stable IDs rather than internal bookkeeping.
+## Language
 
-## Implication for IDs
+Characters, words, sentences, paragraphs, headings, documents are things.
+Only distinct ones get IDs. An occurrence is a position in a table, so it
+is an address and costs nothing to identify. The dictionary is the index of
+words.
 
-If every character and word occurrence is a thing, the index cannot store a
-row for each one up front. Derived things should have deterministic IDs
-(computable from the parent thing and the position) so they are identified
-without being stored until something attaches to them. This is how position
-and identity share a substrate.
+## Syntax
+
+Ingestion uses one canonical syntax. Brackets identify text. A frame
+identifies whatever it contains. Exact notation still to be specified by
+the owner.
 
 ## Open questions
 
-- Smallest act of ingestion: pasted text, link, photo, forwarded email?
-- Which properties compute at ingestion versus later, on demand?
+- Is "The" the same word as "the"? Default for now: exact match only.
+- Exact bracket and frame notation, and how a name is written.
+- What counts as the same image or file. Default: identical bytes.

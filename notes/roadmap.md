@@ -1,24 +1,28 @@
 # Roadmap
 
-Rough order of work. Revised as the owner describes more.
+Each step ends with something that runs and is pushed.
 
-1. **Core index.** Create a thing, give it an ID, attach properties, look it
-   up. SQLite store. Everything else sits on this.
-2. **Ingestion: throw it at the wall.** One entry point that accepts raw
-   input (text, link, file) and makes a thing with an ID and its
-   precomputable properties.
-3. **Connectors** that pull existing things in, each recording source and
-   external ID as properties:
-   - Gmail
-   - Google Calendar
-   - Google Docs
-   - Apple Notes / Reminders (export-based, since Apple has no cloud API)
-   - AI conversations (exports)
-   - Are.na
-   - Obsidian (Markdown folder)
-4. **Gathering.** Ways for things to accumulate other things around them
-   and grow: links, properties, indexes.
-5. **Views and tools.** Small tools on top of the index (to-dos, calendar,
-   finances, habits, decisions), all reading the same things.
+0. **Privacy.** The repository is public. Before any personal content is
+   ingested, make it private or move data to a separate private repository.
+1. **Master index.** Ingest a piece of text, get the next integer. Optional
+   name. Time created recorded automatically. Same content returns the
+   same ID. Stored as an append-only log in plain text, in git.
+2. **Text decomposition.** Ingested text is broken into sentences, words,
+   characters. Each distinct one is a thing. Each thing's table lists its
+   contents by position. Looking up a word shows all its instances.
+3. **Syntax.** Parser for brackets, frames, and names.
+4. **Viewing.** Show a thing, what it contains, where it appears. Switch
+   properties on and off.
+5. **Non-text things.** Images, files, links, with automatic properties and
+   descriptions that connect through their words.
+6. **Capture from the phone.** A way to throw things in without opening a
+   coding session. Then connectors: Gmail, Calendar, Google Docs, exports
+   from Apple Notes, Reminders, AI conversations, Are.na, Obsidian.
+7. **Tools.** To-dos, deadlines, habits, finances, decisions as named
+   indexes over the same things.
 
-See notes/things.md for the founding idea.
+## Storage decision
+
+The append-only ingestion log and the raw ingested files are the source of
+truth and live in git. The SQLite database is rebuilt from them and is
+never committed. Everything derivable is recomputable.
