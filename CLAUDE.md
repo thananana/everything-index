@@ -22,6 +22,12 @@ core data model (thing / property / index, everything gets a stable ID).
   Never rewrite or reorder it. IDs are integers in order of ingestion.
 - `data/index.db` is SQLite, rebuilt from the log automatically. Never commit it.
 - A thing is identified by its raw bytes (SHA-256). Same bytes, same ID.
+- Every thing has an ordered table of the things it contains (`cells` in
+  SQLite, `into` events in the log). Where a thing appears is the same table
+  read by item. Do not add a separate structure for relationships.
+- Text is split into parts once, at ingestion (`everything_index/text.py`),
+  and the result is logged. Never re-split existing things.
+- If the SQLite tables change, raise `SCHEMA` in `store.py` so it rebuilds.
 - The repository is public unless the owner has changed it. Check before
   committing ingested personal content, and warn the owner if it is public.
 - Design notes are in `notes/things.md`, the plan in `notes/roadmap.md`.

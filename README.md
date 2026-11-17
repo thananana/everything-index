@@ -51,13 +51,21 @@ Run these from the top folder of the repository.
 python3 -m everything_index ingest "some text"
 python3 -m everything_index ingest "some text" --name idea
 python3 -m everything_index ingest --file photo.jpg
+python3 -m everything_index new projects
+python3 -m everything_index put idea projects
 python3 -m everything_index show 1
 python3 -m everything_index show idea
+python3 -m everything_index show idea.2
 python3 -m everything_index name 1 idea
 python3 -m everything_index list
 ```
 
 Ingesting prints the ID. The same content always gives the same ID.
+
+Ingested text is broken into sentences, words, and characters. Each distinct
+one is a thing, and `show` lists what a thing contains and everywhere it
+appears. `new` makes an empty named index and `put` places a thing in it.
+An address such as `idea.2` means whatever is at position 2 of `idea`.
 
 ## Tests
 

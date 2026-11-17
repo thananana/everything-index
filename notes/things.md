@@ -44,6 +44,48 @@ Only distinct ones get IDs. An occurrence is a position in a table, so it
 is an address and costs nothing to identify. The dictionary is the index of
 words.
 
+## Anchors and changing identity
+
+If a thing is how it addresses and is addressed, its identity seems to
+move whenever its surroundings do. The resolution used in the code:
+
+- The **integer ID is the anchor.** It is a position in the master index
+  and never changes.
+- A thing made **by content** (text, a file) is fixed: same bytes, same ID.
+- A thing made **by naming** (an empty index) has no content of its own.
+  Its ID and name hold still while what it contains changes freely. This
+  is the box you drag things into.
+- So a name maps to exactly one ID, but what that name gathers is many
+  things and is not fixed.
+
+## Parents, children, sequence
+
+A table is ordered. Being in a table is the parent and child relation, and
+the position is the sequence. Both are kept exactly, and a thing may sit in
+the same table more than once.
+
+## Addresses
+
+Periods separate the steps of an address. `5.2` is whatever sits at
+position 2 of thing 5, and `5.2.1` goes one level deeper. The first step
+may be a name. Names therefore cannot contain periods.
+
+## How text is broken up
+
+At the largest level that gives more than one part: paragraphs, then
+sentences, then words and punctuation marks, then characters. Spaces are
+not kept as things. Sentence detection is simple and will misjudge
+abbreviations such as "e.g."; the rules live in `everything_index/text.py`.
+Parts are decided once, at ingestion, and written to the log, so changing
+the rules later never disturbs existing IDs.
+
+## Long-term shape
+
+- Standalone: usable without Claude and without depending on other apps.
+  The core is plain Python and plain files for that reason.
+- A visual interface where dragging a thing into a box puts it in that
+  index. The `put` operation is that gesture without the picture.
+
 ## Syntax
 
 Ingestion uses one canonical syntax. Brackets identify text. A frame

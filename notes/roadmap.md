@@ -7,7 +7,7 @@ Each step ends with something that runs and is pushed.
 1. **Master index. DONE.** Ingest a piece of text, get the next integer. Optional
    name. Time created recorded automatically. Same content returns the
    same ID. Stored as an append-only log in plain text, in git.
-2. **Text decomposition.** Ingested text is broken into sentences, words,
+2. **Text decomposition, tables, addresses. DONE.** Ingested text is broken into sentences, words,
    characters. Each distinct one is a thing. Each thing's table lists its
    contents by position. Looking up a word shows all its instances.
 3. **Syntax.** Parser for brackets, frames, and names.
@@ -20,6 +20,8 @@ Each step ends with something that runs and is pushed.
    from Apple Notes, Reminders, AI conversations, Are.na, Obsidian.
 7. **Tools.** To-dos, deadlines, habits, finances, decisions as named
    indexes over the same things.
+8. **Standalone.** A visual interface with drag into a box, running
+   without Claude. Likely a small local web page over the same code.
 
 ## Storage decision
 
